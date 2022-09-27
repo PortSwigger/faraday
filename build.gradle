@@ -12,24 +12,32 @@ group = 'burp'
 version = 'v2.8'
 archivesBaseName = 'faraday-burp'
 
+/*
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
+*/
 
 repositories {
     mavenCentral()
 }
 
 dependencies {
-    compile 'net.portswigger.burp.extender:burp-extender-api:1.7.22'
+    implementation 'net.portswigger.burp.extender:burp-extender-api:1.7.22'
 
-    compile group: 'io.github.openfeign', name: 'feign-core', version: '10.1.0'
-    compile group: 'io.github.openfeign', name: 'feign-gson', version: '10.1.0'
+    implementation group: 'io.github.openfeign', name: 'feign-core', version: '10.1.0'
+    implementation group: 'io.github.openfeign', name: 'feign-gson', version: '10.1.0'
 
-    compile group: 'com.github.zafarkhaja', name: 'java-semver', version: '0.9.0'
+    implementation group: 'com.github.zafarkhaja', name: 'java-semver', version: '0.9.0'
 
 }
 
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(11))
+    }
+}
+
 task fatJar(type: Jar) {
-    from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+    from { configurations.compileClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
     with jar
 }
