@@ -1,6 +1,10 @@
+# v2.9 - 2022/12/15
+
+* Add create workspace button
+
 # v2.8 - 2022/09/19
 
-* Add refresh workspace bottom
+* Add refresh workspace button
 * Fix website field
 * Now the host,services and vulns create have a command associated
 
