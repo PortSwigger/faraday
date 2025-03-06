@@ -10,9 +10,11 @@ import burp.IBurpExtenderCallbacks;
 import burp.IScanIssue;
 import burp.ITab;
 import burp.faraday.exceptions.*;
+import burp.faraday.exceptions.http.ConflictException;
 import burp.faraday.models.ExtensionSettings;
 import burp.faraday.models.FaradayConnectorStatus;
 import burp.faraday.models.Workspace;
+import burp.faraday.models.WorkspaceWrapper;
 import burp.faraday.models.vulnerability.Vulnerability;
 import burp.faraday.models.vulnerability.Command;
 
@@ -26,6 +28,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.text.SimpleDateFormat;
 import java.util.HashMap;
+
+import static burp.faraday.FaradayConnector.getMinimumVersion;
 
 /**
  * This class will be responsible of drawing the UI of the extension inside Burp
@@ -485,6 +489,19 @@ public class FaradayExtensionUI implements ITab {
         }
 
         extensionSettings.setUsername(username);
+
+        log("Verifying Faraday's version");
+        try {
+            faradayConnector.validateFaradayMinimumVersion();
+        }
+        catch (InvalidFaradayServerException e) {
+            showErrorAlert("Could not connect to Faraday at " + faradayUrlText.getText().trim() + ". Please ensure the provided URL is " +
+                    "correct and the Faraday service is running.");
+            return;
+        } catch (ServerTooOldException e) {
+            showErrorAlert("The extension won't work properly due to your faraday server version. Minimum required version is " + getMinimumVersion());
+            return;
+        }
         notifyLoggedIn(true);
 
     }
@@ -526,14 +543,12 @@ public class FaradayExtensionUI implements ITab {
         }
 
         faradayConnector.setBaseUrl(faradayUrl, ignoreSSLErrorsCheckbox.isSelected());
-
+        log("Connecting to Faraday.");
         try {
             faradayConnector.validateFaradayURL();
         } catch (InvalidFaradayServerException e) {
-            showErrorAlert("Faraday Server URL is not a valid Faraday server.");
-            return;
-        } catch (ServerTooOldException e) {
-            showErrorAlert("Faraday server is too old to be used with this extension. Please upgrade to the latest version.");
+            showErrorAlert("Could not connect to Faraday at " + faradayUrl + ". Please ensure the provided URL is " +
+                    "correct and the Faraday service is running.");
             return;
         }
 
@@ -542,8 +557,10 @@ public class FaradayExtensionUI implements ITab {
         statusButton.setText("Login");
 
         faradayUrlText.setEditable(false);
+
         setLoginStatus("Connected");
         log("Connected");
+
         this.status = FaradayConnectorStatus.CONNECTED;
     }
 
@@ -634,29 +651,33 @@ public class FaradayExtensionUI implements ITab {
      */
     private void loadWorkspaces() {
         String currentWorkspaceName = extensionSettings.getCurrentWorkspace();
-
+        log("Loading workspaces!");
         workspaceCombo.removeAllItems();
-
+        log("Clearing workspace combo");
         try {
-            List<Workspace> workspaceList = faradayConnector.getWorkspaces();
-            workspaceList.stream().filter(ws -> ws.isActive() == true).forEach(workspaceCombo::addItem);
-
-            if (!currentWorkspaceName.isEmpty()) {
-                workspaceList.stream()
-                        .filter(workspace -> workspace.getName().equals(currentWorkspaceName))
-                        .findFirst()
-                        .ifPresent(workspace -> workspaceCombo.setSelectedItem(workspace));
-            }
+            log("Getting workspaces");
+//            List<Workspace> workspaceList = faradayConnector.getWorkspaces();
+            WorkspaceWrapper workspaceList = faradayConnector.getWorkspaces();
+            workspaceList.getRows().stream().filter(ws -> ws.isActive() == true).forEach(workspaceCombo::addItem);
+//
+//            if (!currentWorkspaceName.isEmpty()) {
+//                workspaceList.stream()
+//                        .filter(workspace -> workspace.getName().equals(currentWorkspaceName))
+//                        .findFirst()
+//                        .ifPresent(workspace -> workspaceCombo.setSelectedItem(workspace));
+//            }
 
 
         } catch (CookieExpiredException | InvalidFaradayServerException e) {
             log("Could not fetch workspaces: " + e);
+        } catch (Exception e){
+            log("Otra exception: " + e);
         }
+
     }
 
     /**
      * Create a new workspace
-     @param workspace The name of the new workspace.
      */
     private void createWorkspace() {
         String workspaceName = newWorkspaceText.getText().trim();
@@ -728,10 +749,10 @@ public class FaradayExtensionUI implements ITab {
                     commandId = commandsMap.get(workspace.getId());
                 }
                 if (issues.size() > 0){
-
                     for (Vulnerability vulnerability : vulnerabilities) {
                         vulnerability.setCommandId(commandId);
-                        if (addVulnerability(vulnerability, workspace)) {
+                        int created = addVulnerability(vulnerability, workspace);
+                        if (created == 1) {
                             log("Created Vulnerability");
                             created_vulns ++;
                         }
@@ -841,22 +862,24 @@ public class FaradayExtensionUI implements ITab {
         return commandId;
     }
 
-    public boolean addVulnerability(final Vulnerability vulnerability, final Workspace workspace) {
+    public int addVulnerability(final Vulnerability vulnerability, final Workspace workspace) {
 
         try {
             faradayConnector.addVulnerabilityToWorkspace(vulnerability, workspace);
         } catch (ObjectNotCreatedException e) {
             log("Unable to create object tree: " + e);
-            return false;
+            return -1;
+        } catch (AlreadyCreatedFaradayServerException e){
+            log("Vulnerability already created ...");
+            return -2;
         } catch (InvalidFaradayServerException e) {
             showErrorAlert("Could not connect to Faraday Server. Please check that it is running and that you are authenticated.");
-            return false;
+            return -3;
         } catch (Exception e) {
             log("Add Vuln Error: " + e);
-            return false;
+            return -4;
         }
-
-        return true;
+        return 1;
     }
 
     /**

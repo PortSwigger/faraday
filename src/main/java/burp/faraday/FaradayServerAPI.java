@@ -10,10 +10,12 @@ import burp.faraday.exceptions.http.ConflictException;
 import burp.faraday.exceptions.http.UnauthorizedException;
 import burp.faraday.exceptions.http.BadRequestException;
 import burp.faraday.models.Workspace;
+import burp.faraday.models.WorkspaceWrapper;
 import burp.faraday.models.requests.SecondFactor;
 import burp.faraday.models.requests.User;
 import burp.faraday.models.responses.CreatedObjectEntity;
 import burp.faraday.models.responses.LoginStatus;
+import burp.faraday.models.responses.ServerConfig;
 import burp.faraday.models.responses.ServerInfo;
 import burp.faraday.models.vulnerability.Host;
 import burp.faraday.models.vulnerability.Service;
@@ -36,6 +38,15 @@ public interface FaradayServerAPI {
     @RequestLine("GET /_api/v3/info")
     @Headers("Content-Type: application/json")
     ServerInfo getInfo();
+
+    /**
+     * Fetches the config of the current Faraday Server
+     *
+     * @return An instance of {@link ServerConfig} describing the Faraday Server
+     */
+    @RequestLine("GET /_api/config")
+    @Headers("Content-Type: application/json")
+    ServerConfig getConfig();
 
     /**
      * Attempts to login using the provided {@link User} credentials.
@@ -81,7 +92,8 @@ public interface FaradayServerAPI {
      */
     @RequestLine("GET /_api/v3/ws")
     @Headers("Content-Type: application/json")
-    List<Workspace> getWorkspaces() throws UnauthorizedException;
+//    List<Workspace> getWorkspaces() throws UnauthorizedException;
+    WorkspaceWrapper getWorkspaces() throws UnauthorizedException;
 
     /**
      * Create a workspace.
@@ -137,7 +149,7 @@ public interface FaradayServerAPI {
      */
     @RequestLine("POST /_api/v3/ws/{workspace}/services")
     @Headers("Content-Type: application/json")
-    CreatedObjectEntity createService(@Param("workspace") String workspace, Service service) throws UnauthorizedException, ConflictException;
+    CreatedObjectEntity createService(@Param("workspace") String workspace, Service service) throws BadRequestException, UnauthorizedException, ConflictException;
 
     /**
      * Creates a vulnerability in the specified workspace.
@@ -151,5 +163,5 @@ public interface FaradayServerAPI {
      */
     @RequestLine("POST /_api/v3/ws/{workspace}/vulns")
     @Headers("Content-Type: application/json")
-    CreatedObjectEntity createVulnerability(@Param("workspace") String workspace, Vulnerability vulnerability) throws UnauthorizedException;
+    CreatedObjectEntity createVulnerability(@Param("workspace") String workspace, Vulnerability vulnerability) throws UnauthorizedException, ConflictException;
 }

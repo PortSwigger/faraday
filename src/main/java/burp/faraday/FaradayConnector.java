@@ -12,12 +12,10 @@ import burp.faraday.exceptions.http.BadRequestException;
 import burp.faraday.exceptions.http.ConflictException;
 import burp.faraday.exceptions.http.UnauthorizedException;
 import burp.faraday.models.Workspace;
+import burp.faraday.models.WorkspaceWrapper;
 import burp.faraday.models.requests.SecondFactor;
 import burp.faraday.models.requests.User;
-import burp.faraday.models.responses.CreatedObjectEntity;
-import burp.faraday.models.responses.ExistingObjectEntity;
-import burp.faraday.models.responses.LoginStatus;
-import burp.faraday.models.responses.ServerInfo;
+import burp.faraday.models.responses.*;
 import burp.faraday.models.vulnerability.Service;
 import burp.faraday.models.vulnerability.Host;
 import burp.faraday.models.vulnerability.Vulnerability;
@@ -58,7 +56,7 @@ public class FaradayConnector {
     /**
      * Minimum version required to use the extension.
      */
-    private static final Version MINIMUM_VERSION = Version.valueOf("3.4.0");
+    private static final Version MINIMUM_VERSION = Version.valueOf("5.1.0");
 
     private final PrintWriter stdout;
     private FaradayServerAPI faradayServerAPI;
@@ -72,6 +70,10 @@ public class FaradayConnector {
 
     public FaradayConnector(PrintWriter stdout) {
         this.stdout = stdout;
+    }
+
+    public static Version getMinimumVersion() {
+        return MINIMUM_VERSION;
     }
 
     /**
@@ -191,9 +193,33 @@ public class FaradayConnector {
      * Validates that the current baseUrl points to a valid Faraday Server.
      *
      * @throws InvalidFaradayServerException When the URL does not point to a valid Faraday Server.
+     *
+     */
+    public void validateFaradayURL() throws InvalidFaradayServerException {
+        log("Validating Faraday URL");
+        ServerConfig serverconfig;
+        try {
+            serverconfig = faradayServerAPI.getConfig();
+            if (serverconfig == null) {
+                throw new InvalidFaradayServerException();
+            }
+            this.urlIsValid = true;
+        } catch (FeignException e) {
+            log("Connection with Faraday server could not be established");
+            throw new InvalidFaradayServerException();
+        } catch (Exception e) {
+            log("An exception occurred while trying to connect with Faraday server: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Validates that the current baseUrl points to a valid Faraday Server.
+     *
+     * @throws InvalidFaradayServerException When the URL does not point to a valid Faraday Server.
      * @throws ServerTooOldException         When the server is running a version lower than 3.4.0
      */
-    public void validateFaradayURL() throws ServerTooOldException, InvalidFaradayServerException {
+    public void validateFaradayMinimumVersion() throws ServerTooOldException, InvalidFaradayServerException {
+
         ServerInfo serverInfo;
         try {
             serverInfo = faradayServerAPI.getInfo();
@@ -219,9 +245,6 @@ public class FaradayConnector {
             log("Faraday server is too old to be used with this extension. Please upgrade to the latest version.");
             throw new ServerTooOldException();
         }
-
-        this.urlIsValid = true;
-        log("Faraday server found!");
     }
 
     /**
@@ -329,8 +352,11 @@ public class FaradayConnector {
      *
      * @throws InvalidFaradayServerException If the Faraday Server URL is not valid, or an error occurred while sending the request.
      */
-    List<Workspace> getWorkspaces() throws InvalidFaradayServerException, CookieExpiredException {
+//    List<Workspace> getWorkspaces() throws InvalidFaradayServerException, CookieExpiredException {
+     WorkspaceWrapper getWorkspaces() throws InvalidFaradayServerException, CookieExpiredException {
+        log("Fetching workspaces before checking session.");
         if (!this.urlIsValid) {
+            log("Faraday server URL is not valid.");
             throw new InvalidFaradayServerException();
         }
 
@@ -339,6 +365,7 @@ public class FaradayConnector {
         try {
             return faradayServerAPI.getWorkspaces();
         } catch (UnauthorizedException e) {
+            log("Exception!");
             throw new CookieExpiredException();
         }
     }
@@ -397,7 +424,6 @@ public class FaradayConnector {
     /**
      * Adds a vulnerability to the current workspace.
      *
-     * @param vulnerability The vulnerability to create.
      */
     public int addCommandToWorkspace(final Command command, final Workspace workspace)
             throws InvalidFaradayServerException,
@@ -428,7 +454,10 @@ public class FaradayConnector {
      */
     void addVulnerabilityToWorkspace(final Vulnerability vulnerability, final Workspace workspace)
             throws InvalidFaradayServerException,
-            ObjectNotCreatedException {
+            ObjectNotCreatedException,
+            BadRequestFaradayServerException,
+            AlreadyCreatedFaradayServerException
+            {
 
         if (!this.urlIsValid) {
             throw new InvalidFaradayServerException();
@@ -451,22 +480,44 @@ public class FaradayConnector {
             service.setParent(hostEntity.getId());
             service.setCommandId(vulnerability.getCommandId());
             CreatedObjectEntity serviceEntity;
+
             try {
+                if (service.getPorts()[0] < 0){
+                    log(service.getName());
+                    if (service.getName() == "http"){
+                        service.setPorts(new int[]{80});
+                    }
+                    else{
+                        service.setPorts(new int[]{443});
+                    }
+                }
                 serviceEntity = faradayServerAPI.createService(workspace.getName(), service);
             } catch (ConflictException e) {
                 serviceEntity = e.getExistingObject().getObject();
+            } catch (BadRequestException e) {
+                // TODO: handle of bad request responses
+                log(workspace.getName());
+                log(service.toString());
+                throw new BadRequestFaradayServerException();
             }
 
             // Set the parent ID of the vulnerability, and issue the creation request.
             vulnerability.setParent(serviceEntity.getId());
+            log("Service " + serviceEntity.getId());
+
             try {
                 final CreatedObjectEntity vulnerabilityEntity = faradayServerAPI.createVulnerability(workspace.getName(), vulnerability);
+            } catch (ConflictException e) {
+                log("Vulnerability already exists.");
+                throw new AlreadyCreatedFaradayServerException();
             } catch (Exception e) {
                 throw new ObjectNotCreatedException();
             }
-            //log("Created vulnerability " + vulnerabilityEntity.getId());
-
-        } catch (UnauthorizedException e) {
+        } catch (AlreadyCreatedFaradayServerException e) {
+            log("Vulnerability already exists.");
+            throw new AlreadyCreatedFaradayServerException();
+        }
+        catch (UnauthorizedException e) {
             throw new ObjectNotCreatedException();
         }
     }
