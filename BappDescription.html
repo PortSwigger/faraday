@@ -1,1 +1,22 @@
-<p>This extension integrates Burp with the Faraday Integrated Penetration-Test Environment.</p>
+<p>This extension will allow you to import requests and issues from your Burp workspace into Faraday.</p>
+
+<h2>Usage</h2>
+
+<ul>
+	<li>Navigate to the new "Faraday" tab.</li>
+	<li>Log in to your Faraday instance.
+		<ul>
+			<li>Complete the Faraday Server URL with the address where your server is running. If it is the same machine, you can leave it as is.</li>
+			<li>Once you are sure the URL is correct, click the "Connect" button so the extension can validate your Faraday server.</li>
+			<li>Once connected, fill in the username and password fields, then click "Login". If a 2FA token is requested by the server, you will be asked to provide it.</li>
+		</ul>
+	</li>
+	<li>Once authenticated, you will be able to:
+		<ul>
+			<li>Import the vulnerabilities you've found so far.</li>
+			<li>Choose if vulnerabilities should be imported automatically as soon as they are found or not (it's disabled by default).</li>
+			<li>Restore the extension configuration.</li>
+		</ul>
+	</li>
+	<li><b>Additional functionality:</b> Use the context menu to send issues and requests directly to Faraday.</li>
+</ul>
